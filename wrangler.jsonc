@@ -18,5 +18,8 @@
       "binding": "R2",
       "bucket_name": "worth"
     }
-  ]
+  ],
+  "triggers": {
+    "crons": ["0 * * * *"]
+  }
 }
