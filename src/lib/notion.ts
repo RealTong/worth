@@ -51,7 +51,7 @@ type NotionConfig = {
   dataSourceId: string
 }
 
-const NOTION_VERSION = '2025-09-03'
+const NOTION_VERSION = '2026-03-11'
 
 export async function syncNotionCatalog(
   config: NotionConfig,
