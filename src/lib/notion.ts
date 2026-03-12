@@ -84,7 +84,6 @@ async function fetchAllNotionPages(config: NotionConfig): Promise<NotionPage[]> 
     )
 
     if (!response.ok) {
-      console.log('Notion API error:', await response.text())
       throw new Error(`Notion sync failed with status ${response.status}`)
     }
 
