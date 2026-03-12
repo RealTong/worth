@@ -1,0 +1,102 @@
+import {
+  asCatalogSnapshot,
+  CatalogSnapshot,
+  cloneSnapshotAsCache,
+  getCatalogCacheKey,
+  getSampleCatalog,
+  isSnapshotFresh,
+} from './catalog'
+import { syncNotionCatalog } from './notion'
+
+export type KVNamespaceLike = {
+  get(key: string, type?: 'json'): Promise<unknown>
+  put(key: string, value: string): Promise<void>
+}
+
+export type AppBindings = {
+  ADMIN_TOKEN?: string
+  NOTION_API_TOKEN?: string
+  NOTION_DATA_SOURCE_ID?: string
+  CATALOG_STALE_MS?: string
+  CATALOG_CACHE?: KVNamespaceLike
+}
+
+const DEFAULT_STALE_MS = 1000 * 60 * 60 * 6
+
+export async function getCatalogSnapshot(
+  env: AppBindings | undefined,
+  now = new Date()
+): Promise<CatalogSnapshot> {
+  const cachedSnapshot = env?.CATALOG_CACHE
+    ? await readSnapshotFromCache(env.CATALOG_CACHE)
+    : null
+  const staleMs = getStaleMs(env)
+
+  if (cachedSnapshot && isSnapshotFresh(cachedSnapshot, staleMs, now.getTime())) {
+    return cloneSnapshotAsCache(cachedSnapshot)
+  }
+
+  if (hasNotionConfig(env)) {
+    try {
+      return await syncCatalog(env, now)
+    } catch (error) {
+      if (cachedSnapshot) {
+        return cloneSnapshotAsCache(cachedSnapshot)
+      }
+
+      throw error
+    }
+  }
+
+  if (cachedSnapshot) {
+    return cloneSnapshotAsCache(cachedSnapshot)
+  }
+
+  return getSampleCatalog(now)
+}
+
+export async function syncCatalog(
+  env: AppBindings | undefined,
+  now = new Date()
+): Promise<CatalogSnapshot> {
+  if (!hasNotionConfig(env)) {
+    throw new Error('Missing Notion configuration')
+  }
+
+  const snapshot = await syncNotionCatalog(
+    {
+      apiToken: env.NOTION_API_TOKEN!,
+      dataSourceId: env.NOTION_DATA_SOURCE_ID!,
+    },
+    now
+  )
+
+  if (env.CATALOG_CACHE) {
+    await env.CATALOG_CACHE.put(getCatalogCacheKey(), JSON.stringify(snapshot))
+  }
+
+  return snapshot
+}
+
+async function readSnapshotFromCache(cache: KVNamespaceLike): Promise<CatalogSnapshot | null> {
+  const cached = await cache.get(getCatalogCacheKey(), 'json')
+
+  return asCatalogSnapshot(cached)
+}
+
+function hasNotionConfig(env: AppBindings | undefined): env is AppBindings & {
+  NOTION_API_TOKEN: string
+  NOTION_DATA_SOURCE_ID: string
+} {
+  return Boolean(env?.NOTION_API_TOKEN && env?.NOTION_DATA_SOURCE_ID)
+}
+
+function getStaleMs(env: AppBindings | undefined) {
+  const parsed = Number(env?.CATALOG_STALE_MS)
+
+  if (!Number.isFinite(parsed) || parsed <= 0) {
+    return DEFAULT_STALE_MS
+  }
+
+  return parsed
+}
