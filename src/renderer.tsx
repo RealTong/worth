@@ -7,7 +7,7 @@ export const renderer = jsxRenderer(({ children }) => {
       <head>
         <meta charSet="utf-8" />
         <meta content="width=device-width, initial-scale=1" name="viewport" />
-        <title>Worth Ledger</title>
+        <title>Worth Collection</title>
         <link href="https://fonts.googleapis.com" rel="preconnect" />
         <link crossOrigin="" href="https://fonts.gstatic.com" rel="preconnect" />
         <link

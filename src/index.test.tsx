@@ -101,10 +101,13 @@ describe('worth worker', () => {
 
     const html = await response.text()
 
-    expect(html).toContain('Worth Ledger')
-    expect(html).toContain('Portfolio Daily Cost')
+    expect(html).toContain('Worth Collection')
+    expect(html).toContain('Daily Carry')
+    expect(html).toContain('Total Spend')
     expect(html).toContain('MacBook Pro')
     expect(html).toContain('/media/macbook-pro-m3-max')
+    expect(html).toContain('summary-rail')
+    expect(html).toContain('gallery-grid')
   })
 
   test('returns a client error when manual sync runs without Notion config', async () => {
@@ -183,7 +186,7 @@ describe('worth worker', () => {
         })
       }
 
-      expect(String(input)).toContain('/v1/data-sources/ds_123/query')
+      expect(String(input)).toContain('/v1/data_sources/ds_123/query')
       expect(init?.headers).toMatchObject({
         Authorization: 'Bearer notion_secret',
       })
