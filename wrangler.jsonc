@@ -2,5 +2,21 @@
   "$schema": "node_modules/wrangler/config-schema.json",
   "name": "worth",
   "compatibility_date": "2025-08-03",
-  "main": "./src/index.tsx"
+  "main": "./src/index.tsx",
+  "vars": {
+    "NOTION_API_TOKEN": "",
+    "NOTION_DATA_SOURCE_ID": "",
+  },
+  "kv_namespaces": [
+    {
+      "binding": "KV",
+      "id": "worth"
+    }
+  ],
+  "r2_buckets": [
+    {
+      "binding": "R2",
+      "bucket_name": "worth"
+    }
+  ]
 }

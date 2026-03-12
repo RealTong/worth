@@ -69,7 +69,7 @@ async function fetchAllNotionPages(config: NotionConfig): Promise<NotionPage[]> 
 
   do {
     const response = await fetch(
-      `https://api.notion.com/v1/data-sources/${config.dataSourceId}/query`,
+      `https://api.notion.com/v1/data_sources/${config.dataSourceId}/query`,
       {
         method: 'POST',
         headers: {
@@ -79,12 +79,12 @@ async function fetchAllNotionPages(config: NotionConfig): Promise<NotionPage[]> 
         },
         body: JSON.stringify({
           page_size: 100,
-          start_cursor: nextCursor,
         }),
       }
     )
 
     if (!response.ok) {
+      console.log('Notion API error:', await response.text())
       throw new Error(`Notion sync failed with status ${response.status}`)
     }
 
