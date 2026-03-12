@@ -1,7 +1,7 @@
 import { Hono } from 'hono'
 import { HomePage } from './components/home-page'
 import { AppBindings, getCatalogSnapshot, syncCatalog } from './lib/catalog-service'
-import { getAssetMediaUrl } from './lib/catalog'
+import { getAssetImageStorageKey, getAssetMediaUrl } from './lib/catalog'
 import { renderer } from './renderer'
 
 const app = new Hono<{ Bindings: AppBindings }>()
@@ -25,6 +25,23 @@ app.get('/api/assets', async (c) => {
 })
 
 app.get('/media/:assetId', async (c) => {
+  const storageKey = getAssetImageStorageKey(c.req.param('assetId'))
+
+  if (c.env.R2) {
+    const object = await c.env.R2.get(storageKey)
+
+    if (object) {
+      const headers = new Headers()
+
+      object.writeHttpMetadata?.(headers)
+      headers.set('cache-control', 'public, max-age=86400, s-maxage=86400, stale-while-revalidate=604800')
+
+      return new Response(object.body ?? null, {
+        headers,
+      })
+    }
+  }
+
   const snapshot = await getCatalogSnapshot(c.env)
   const asset = snapshot.items.find((item) => item.id === c.req.param('assetId'))
 
@@ -53,6 +70,14 @@ app.get('/media/:assetId', async (c) => {
   headers.set('cache-control', 'public, max-age=86400, s-maxage=86400, stale-while-revalidate=604800')
   headers.set('x-worth-image-origin', snapshot.meta.origin ?? snapshot.meta.source)
 
+  if (c.env.R2) {
+    await c.env.R2.put(storageKey, await upstream.clone().arrayBuffer(), {
+      httpMetadata: {
+        contentType: upstream.headers.get('content-type') ?? undefined,
+      },
+    })
+  }
+
   return new Response(upstream.body, {
     status: upstream.status,
     headers,
@@ -60,19 +85,18 @@ app.get('/media/:assetId', async (c) => {
 })
 
 app.post('/api/admin/sync', async (c) => {
-  const authorization = c.req.header('authorization')
-  const adminToken = c.env?.ADMIN_TOKEN
+  try {
+    return c.json(await syncCatalog(c.env))
+  } catch (error) {
+    const message = error instanceof Error ? error.message : 'Sync failed'
 
-  if (!adminToken || authorization !== `Bearer ${adminToken}`) {
     return c.json(
       {
-        error: 'Unauthorized',
+        error: message,
       },
-      401
+      message === 'Missing Notion configuration' ? 400 : 502
     )
   }
-
-  return c.json(await syncCatalog(c.env))
 })
 
 export default {

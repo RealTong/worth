@@ -1,4 +1,9 @@
-import { CatalogSnapshot, formatCurrency, getAssetMediaUrl } from '../lib/catalog'
+import {
+  CatalogSnapshot,
+  formatCurrency,
+  getAssetMediaUrl,
+  getStatusLabel,
+} from '../lib/catalog'
 
 type HomePageProps = {
   snapshot: CatalogSnapshot
@@ -18,7 +23,12 @@ export function HomePage({ snapshot }: HomePageProps) {
         </div>
         <div class="hero-metric">
           <span class="metric-label">Portfolio Daily Cost</span>
-          <strong>{formatCurrency(snapshot.summary.portfolioDailyCost)}</strong>
+          <strong>
+            {formatCurrency(
+              snapshot.summary.portfolioDailyCost,
+              snapshot.summary.currency
+            )}
+          </strong>
           <span class="metric-caption">
             Based on elapsed ownership days across {snapshot.summary.totalAssets}{' '}
             tracked items.
@@ -29,11 +39,21 @@ export function HomePage({ snapshot }: HomePageProps) {
       <section class="summary-strip" aria-label="Portfolio summary">
         <article>
           <span>Total Purchase Value</span>
-          <strong>{formatCurrency(snapshot.summary.totalPurchaseValue)}</strong>
+          <strong>
+            {formatCurrency(
+              snapshot.summary.totalPurchaseValue,
+              snapshot.summary.currency
+            )}
+          </strong>
         </article>
         <article>
           <span>Current Estimated Value</span>
-          <strong>{formatCurrency(snapshot.summary.totalCurrentValue)}</strong>
+          <strong>
+            {formatCurrency(
+              snapshot.summary.totalCurrentValue,
+              snapshot.summary.currency
+            )}
+          </strong>
         </article>
         <article>
           <span>Active Assets</span>
@@ -57,26 +77,28 @@ export function HomePage({ snapshot }: HomePageProps) {
               <div class="asset-body">
                 <div class="asset-header">
                   <div>
-                    <p class="asset-category">{item.category}</p>
+                    <p class="asset-category">
+                      {item.category} · {item.currency}
+                    </p>
                     <h3>{item.name}</h3>
                   </div>
                   <span class={`status-pill status-${item.status}`}>
-                    {item.status}
+                    {getStatusLabel(item.status)}
                   </span>
                 </div>
 
                 <dl class="asset-stats">
                   <div>
                     <dt>Purchase</dt>
-                    <dd>{formatCurrency(item.purchasePrice)}</dd>
+                    <dd>{formatCurrency(item.purchasePrice, item.currency)}</dd>
                   </div>
                   <div>
                     <dt>Current</dt>
-                    <dd>{formatCurrency(item.currentPrice)}</dd>
+                    <dd>{formatCurrency(item.currentPrice, item.currency)}</dd>
                   </div>
                   <div>
                     <dt>Daily cost</dt>
-                    <dd>{formatCurrency(item.dailyCost)}</dd>
+                    <dd>{formatCurrency(item.dailyCost, item.currency)}</dd>
                   </div>
                   <div>
                     <dt>Days owned</dt>
@@ -84,7 +106,7 @@ export function HomePage({ snapshot }: HomePageProps) {
                   </div>
                 </dl>
 
-                <p class="asset-notes">{item.notes}</p>
+                {item.notes ? <p class="asset-notes">{item.notes}</p> : null}
               </div>
             </article>
           ))}

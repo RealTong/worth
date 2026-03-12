@@ -24,6 +24,53 @@ class MemoryKV {
   }
 }
 
+class MemoryR2 {
+  private store = new Map<
+    string,
+    {
+      body: string
+      contentType?: string
+    }
+  >()
+
+  async get(key: string) {
+    const value = this.store.get(key)
+
+    if (!value) {
+      return null
+    }
+
+    return {
+      body: value.body,
+      async text() {
+        return value.body
+      },
+      writeHttpMetadata(headers: Headers) {
+        if (value.contentType) {
+          headers.set('content-type', value.contentType)
+        }
+      },
+    }
+  }
+
+  async put(
+    key: string,
+    value: BodyInit | null,
+    options?: {
+      httpMetadata?: {
+        contentType?: string
+      }
+    }
+  ) {
+    const body = value ? await new Response(value).text() : ''
+
+    this.store.set(key, {
+      body,
+      contentType: options?.httpMetadata?.contentType,
+    })
+  }
+}
+
 const originalFetch = globalThis.fetch
 
 afterEach(() => {
@@ -60,12 +107,12 @@ describe('worth worker', () => {
     expect(html).toContain('/media/macbook-pro-m3-max')
   })
 
-  test('rejects manual sync requests without an admin token', async () => {
+  test('returns a client error when manual sync runs without Notion config', async () => {
     const response = await app.request('http://local.test/api/admin/sync', {
       method: 'POST',
     })
 
-    expect(response.status).toBe(401)
+    expect(response.status).toBe(400)
   })
 
   test('prefers a fresh cached snapshot when KV data exists', async () => {
@@ -79,6 +126,7 @@ describe('worth worker', () => {
             id: 'cached-camera',
             name: 'Cached Camera',
             category: 'Electronics',
+            currency: 'USD',
             purchasePrice: 1400,
             currentPrice: 980,
             purchaseDate: '2024-06-01',
@@ -108,7 +156,7 @@ describe('worth worker', () => {
       'http://local.test/api/assets',
       undefined,
       {
-        CATALOG_CACHE: cache,
+        KV: cache,
         CATALOG_STALE_MS: '3600000',
       }
     )
@@ -124,8 +172,17 @@ describe('worth worker', () => {
 
   test('syncs a Notion catalog into KV when the admin token is valid', async () => {
     const cache = new MemoryKV()
+    const bucket = new MemoryR2()
 
     globalThis.fetch = async (input, init) => {
+      if (String(input) === 'https://assets.notion.local/iphone.png') {
+        return new Response('iphone-image', {
+          headers: {
+            'content-type': 'image/png',
+          },
+        })
+      }
+
       expect(String(input)).toContain('/v1/data-sources/ds_123/query')
       expect(init?.headers).toMatchObject({
         Authorization: 'Bearer notion_secret',
@@ -134,59 +191,47 @@ describe('worth worker', () => {
       return Response.json({
         results: [
           {
-            id: 'page_dji_mini_4_pro',
+            id: 'page_iphone_15_pro',
             properties: {
-              Name: {
+              名称: {
                 type: 'title',
                 title: [
                   {
-                    plain_text: 'DJI Mini 4 Pro',
+                    plain_text: 'iPhone 15 Pro',
                   },
                 ],
               },
-              Category: {
+              购买价格: {
+                type: 'number',
+                number: 8999,
+              },
+              货币: {
                 type: 'select',
                 select: {
-                  name: 'Electronics',
+                  name: 'CNY',
                 },
               },
-              PurchasePrice: {
-                type: 'number',
-                number: 999,
-              },
-              CurrentPrice: {
-                type: 'number',
-                number: 820,
-              },
-              PurchaseDate: {
+              购买时间: {
                 type: 'date',
                 date: {
-                  start: '2025-01-05',
+                  start: '2023-10-01',
                 },
               },
-              Status: {
+              服役状态: {
                 type: 'select',
                 select: {
-                  name: 'active',
+                  name: '服役中',
                 },
               },
-              Image: {
+              产品图片: {
                 type: 'files',
                 files: [
                   {
-                    type: 'external',
-                    name: 'DJI Mini 4 Pro',
-                    external: {
-                      url: 'https://example.com/dji.jpg',
+                    type: 'file',
+                    name: 'image.png',
+                    file: {
+                      url: 'https://assets.notion.local/iphone.png',
                     },
-                  },
-                ],
-              },
-              Notes: {
-                type: 'rich_text',
-                rich_text: [
-                  {
-                    plain_text: 'Compact travel drone.',
                   },
                 ],
               },
@@ -200,15 +245,12 @@ describe('worth worker', () => {
       'http://local.test/api/admin/sync',
       {
         method: 'POST',
-        headers: {
-          authorization: 'Bearer secret',
-        },
       },
       {
-        ADMIN_TOKEN: 'secret',
         NOTION_API_TOKEN: 'notion_secret',
         NOTION_DATA_SOURCE_ID: 'ds_123',
-        CATALOG_CACHE: cache,
+        KV: cache,
+        R2: bucket,
       }
     )
 
@@ -216,24 +258,37 @@ describe('worth worker', () => {
 
     const payload = await response.json()
     const snapshot = await cache.get('worth:catalog', 'json')
+    const cachedImage = await bucket.get('assets/page_iphone_15_pro')
 
     expect(payload.meta.source).toBe('notion')
-    expect(payload.items[0].name).toBe('DJI Mini 4 Pro')
+    expect(payload.items[0].name).toBe('iPhone 15 Pro')
+    expect(payload.items[0].currency).toBe('CNY')
     expect(payload.items[0].dailyCost).toBeGreaterThan(0)
-    expect(snapshot.items[0].name).toBe('DJI Mini 4 Pro')
+    expect(snapshot.items[0].name).toBe('iPhone 15 Pro')
+    expect(snapshot.items[0].currency).toBe('CNY')
+    expect(await cachedImage?.text()).toBe('iphone-image')
   })
 
   test('runs the same sync pipeline from the scheduled worker handler', async () => {
     const cache = new MemoryKV()
+    const bucket = new MemoryR2()
     const tasks: Promise<unknown>[] = []
 
-    globalThis.fetch = async () =>
-      Response.json({
+    globalThis.fetch = async (input) => {
+      if (String(input) === 'https://assets.notion.local/switch.png') {
+        return new Response('switch-image', {
+          headers: {
+            'content-type': 'image/png',
+          },
+        })
+      }
+
+      return Response.json({
         results: [
           {
             id: 'page_switch',
             properties: {
-              Name: {
+              名称: {
                 type: 'title',
                 title: [
                   {
@@ -241,40 +296,36 @@ describe('worth worker', () => {
                   },
                 ],
               },
-              Category: {
-                type: 'select',
-                select: {
-                  name: 'Consumer Goods',
-                },
-              },
-              PurchasePrice: {
+              购买价格: {
                 type: 'number',
                 number: 449,
               },
-              CurrentPrice: {
-                type: 'number',
-                number: 410,
+              货币: {
+                type: 'select',
+                select: {
+                  name: 'USD',
+                },
               },
-              PurchaseDate: {
+              购买时间: {
                 type: 'date',
                 date: {
                   start: '2026-01-03',
                 },
               },
-              Status: {
+              服役状态: {
                 type: 'select',
                 select: {
-                  name: 'active',
+                  name: '服役中',
                 },
               },
-              Image: {
+              产品图片: {
                 type: 'files',
                 files: [
                   {
-                    type: 'external',
-                    name: 'Nintendo Switch 2',
-                    external: {
-                      url: 'https://example.com/switch.jpg',
+                    type: 'file',
+                    name: 'switch.png',
+                    file: {
+                      url: 'https://assets.notion.local/switch.png',
                     },
                   },
                 ],
@@ -283,6 +334,7 @@ describe('worth worker', () => {
           },
         ],
       })
+    }
 
     expect(typeof app.scheduled).toBe('function')
 
@@ -294,7 +346,8 @@ describe('worth worker', () => {
       {
         NOTION_API_TOKEN: 'notion_secret',
         NOTION_DATA_SOURCE_ID: 'ds_123',
-        CATALOG_CACHE: cache,
+        KV: cache,
+        R2: bucket,
       },
       {
         waitUntil(promise) {
@@ -308,24 +361,38 @@ describe('worth worker', () => {
     await Promise.all(tasks)
 
     const snapshot = await cache.get('worth:catalog', 'json')
+    const cachedImage = await bucket.get('assets/page_switch')
 
     expect(snapshot.meta.source).toBe('notion')
     expect(snapshot.items[0].name).toBe('Nintendo Switch 2')
+    expect(snapshot.items[0].currency).toBe('USD')
+    expect(await cachedImage?.text()).toBe('switch-image')
   })
 
-  test('proxies asset images through the worker with cache-friendly headers', async () => {
-    globalThis.fetch = async () =>
-      new Response('binary-image', {
-        headers: {
-          'content-type': 'image/jpeg',
-        },
-      })
+  test('serves asset images from R2 before falling back to upstream fetches', async () => {
+    const bucket = new MemoryR2()
 
-    const response = await app.request('http://local.test/media/macbook-pro-m3-max')
+    await bucket.put('assets/macbook-pro-m3-max', 'r2-image', {
+      httpMetadata: {
+        contentType: 'image/webp',
+      },
+    })
+
+    globalThis.fetch = async () => {
+      throw new Error('upstream fetch should not run when R2 already has the image')
+    }
+
+    const response = await app.request(
+      'http://local.test/media/macbook-pro-m3-max',
+      undefined,
+      {
+        R2: bucket,
+      }
+    )
 
     expect(response.status).toBe(200)
-    expect(response.headers.get('content-type')).toBe('image/jpeg')
+    expect(response.headers.get('content-type')).toBe('image/webp')
     expect(response.headers.get('cache-control')).toContain('public')
-    expect(await response.text()).toBe('binary-image')
+    expect(await response.text()).toBe('r2-image')
   })
 })

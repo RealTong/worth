@@ -6,10 +6,10 @@ A Cloudflare Workers + Hono + Vite app for tracking the ownership cost of electr
 
 - SSR dashboard at `/`
 - JSON API at `/api/assets`
-- Protected manual sync endpoint at `POST /api/admin/sync`
+- Public manual sync endpoint at `POST /api/admin/sync`
 - Cloudflare `scheduled()` hook for cron-driven sync
-- Notion data-source ingestion with KV snapshot caching
-- Worker image proxy at `/media/:assetId` with cache-friendly headers
+- Notion data-source ingestion with `KV` snapshot caching
+- R2-backed image caching behind `/media/:assetId`
 - Sample fallback dataset when Notion is not configured
 
 ## Local commands
@@ -26,7 +26,6 @@ bun run build
 Create `.dev.vars` locally or set the same values in Cloudflare:
 
 ```txt
-ADMIN_TOKEN=replace-me
 NOTION_API_TOKEN=secret_xxx
 NOTION_DATA_SOURCE_ID=xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx
 CATALOG_STALE_MS=21600000
@@ -34,7 +33,7 @@ CATALOG_STALE_MS=21600000
 
 ## Cloudflare bindings
 
-Bind a KV namespace as `CATALOG_CACHE`.
+Bind your namespaces exactly as `KV` and `R2`.
 
 Example `wrangler.jsonc` snippet:
 
@@ -42,8 +41,14 @@ Example `wrangler.jsonc` snippet:
 {
   "kv_namespaces": [
     {
-      "binding": "CATALOG_CACHE",
+      "binding": "KV",
       "id": "your-kv-namespace-id"
+    }
+  ],
+  "r2_buckets": [
+    {
+      "binding": "R2",
+      "bucket_name": "your-r2-bucket"
     }
   ],
   "triggers": {
@@ -54,28 +59,26 @@ Example `wrangler.jsonc` snippet:
 
 ## Notion property mapping
 
-The sync layer accepts either English or Chinese field names. Recommended properties:
+The live database currently uses these fields:
 
-- `Name` or `名称`: title
-- `Category` or `分类`: select
-- `PurchasePrice` / `Purchase Price` / `买入价格`: number
-- `CurrentPrice` / `Current Price` / `现价`: number
-- `PurchaseDate` / `Purchase Date` / `购买日期`: date
-- `Status` or `状态`: select (`active`, `idle`, `retired`)
-- `Image` or `图片`: files
-- `Notes` or `备注`: rich text
+- `名称`: title
+- `产品图片`: files
+- `购买价格`: number
+- `货币`: select (`CNY`, `USD`)
+- `购买时间`: date
+- `服役状态`: select (`服役中`, `已退役`, `已出售`)
 
 ## Response shape
 
 `GET /api/assets` returns:
 
-- `items`: normalized assets with `dailyCost` and `mediaUrl`
+- `items`: normalized assets with `currency`, `dailyCost`, and `mediaUrl`
 - `summary`: totals for purchase value, current value, active assets, and portfolio daily cost
 - `meta`: snapshot source (`sample`, `cache`, or `notion`) and timestamp
 
 ## Notes
 
 - The current daily cost formula is `purchasePrice / daysOwned`.
-- If KV has a fresh snapshot, the app serves cache first.
-- If Notion fetch fails but KV has stale data, the app falls back to the cached snapshot.
-- The image proxy lets Cloudflare cache remote and expiring Notion file URLs behind a stable path.
+- If `KV` has a fresh snapshot, the app serves cache first.
+- If Notion fetch fails but `KV` has stale data, the app falls back to the cached snapshot.
+- Sync downloads product images into `R2`, and `/media/:assetId` serves R2 first before falling back to the upstream Notion file URL.

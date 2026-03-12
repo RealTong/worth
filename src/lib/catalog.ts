@@ -1,10 +1,12 @@
 export type AssetStatus = 'active' | 'idle' | 'retired'
 export type CatalogSource = 'sample' | 'notion' | 'cache'
+export type CurrencyCode = 'CNY' | 'USD' | 'MIXED' | string
 
 export type AssetItem = {
   id: string
   name: string
   category: string
+  currency: CurrencyCode
   purchasePrice: number
   currentPrice: number
   purchaseDate: string
@@ -22,6 +24,7 @@ export type CatalogSummary = {
   totalPurchaseValue: number
   totalCurrentValue: number
   portfolioDailyCost: number
+  currency: CurrencyCode
 }
 
 export type CatalogSnapshot = {
@@ -43,6 +46,7 @@ const SAMPLE_ASSETS: AssetSeed[] = [
     id: 'macbook-pro-m3-max',
     name: 'MacBook Pro',
     category: 'Electronics',
+    currency: 'USD',
     purchasePrice: 2799,
     currentPrice: 2280,
     purchaseDate: '2024-01-18',
@@ -55,6 +59,7 @@ const SAMPLE_ASSETS: AssetSeed[] = [
     id: 'tesla-model-y',
     name: 'Tesla Model Y',
     category: 'Vehicle',
+    currency: 'USD',
     purchasePrice: 38200,
     currentPrice: 33100,
     purchaseDate: '2023-06-01',
@@ -67,6 +72,7 @@ const SAMPLE_ASSETS: AssetSeed[] = [
     id: 'airpods-pro-2',
     name: 'AirPods Pro',
     category: 'Consumer Goods',
+    currency: 'USD',
     purchasePrice: 249,
     currentPrice: 145,
     purchaseDate: '2024-08-12',
@@ -110,6 +116,8 @@ export function buildAssetItem(asset: AssetSeed, now = new Date()): AssetItem {
 }
 
 export function buildCatalogSummary(items: AssetItem[]): CatalogSummary {
+  const currencies = [...new Set(items.map((item) => item.currency).filter(Boolean))]
+
   return {
     totalAssets: items.length,
     activeAssets: items.filter((item) => item.status === 'active').length,
@@ -122,6 +130,7 @@ export function buildCatalogSummary(items: AssetItem[]): CatalogSummary {
     portfolioDailyCost: roundCurrency(
       items.reduce((total, item) => total + item.dailyCost, 0)
     ),
+    currency: currencies.length === 1 ? currencies[0] : 'MIXED',
   }
 }
 
@@ -173,12 +182,34 @@ export function getAssetMediaUrl(assetId: string) {
   return `/media/${assetId}`
 }
 
-export function formatCurrency(value: number): string {
-  return new Intl.NumberFormat('en-US', {
+export function getAssetImageStorageKey(assetId: string) {
+  return `assets/${assetId}`
+}
+
+export function formatCurrency(value: number, currency: CurrencyCode = 'USD'): string {
+  if (currency === 'MIXED') {
+    return new Intl.NumberFormat('en-US', {
+      maximumFractionDigits: 2,
+    }).format(value)
+  }
+
+  return new Intl.NumberFormat(currency === 'CNY' ? 'zh-CN' : 'en-US', {
     style: 'currency',
-    currency: 'USD',
+    currency,
     maximumFractionDigits: 2,
   }).format(value)
+}
+
+export function getStatusLabel(status: AssetStatus) {
+  if (status === 'idle') {
+    return '闲置'
+  }
+
+  if (status === 'retired') {
+    return '已退役'
+  }
+
+  return '服役中'
 }
 
 function getDaysOwned(purchaseDate: string, now: Date): number {

@@ -102,6 +102,7 @@ function mapNotionPageToAsset(page: NotionPage): AssetSeed {
   const purchasePrice = readNumber(properties, [
     'PurchasePrice',
     'Purchase Price',
+    '购买价格',
     '买入价格',
     '价格',
   ])
@@ -109,16 +110,17 @@ function mapNotionPageToAsset(page: NotionPage): AssetSeed {
   return {
     id: page.id,
     name: readTitle(properties, ['Name', '名称', 'Title']) ?? 'Untitled asset',
-    category: readSelect(properties, ['Category', '分类']) ?? 'Uncategorized',
+    category: readSelect(properties, ['Category', '分类']) ?? 'Personal Asset',
+    currency: readSelect(properties, ['货币', 'Currency']) ?? 'USD',
     purchasePrice,
     currentPrice:
-      readNumber(properties, ['CurrentPrice', 'Current Price', '现价']) ?? purchasePrice,
+      readNumber(properties, ['CurrentPrice', 'Current Price', '现价']) || purchasePrice,
     purchaseDate:
-      readDate(properties, ['PurchaseDate', 'Purchase Date', '购买日期']) ??
+      readDate(properties, ['PurchaseDate', 'Purchase Date', '购买日期', '购买时间']) ??
       new Date().toISOString().slice(0, 10),
-    status: normalizeStatus(readSelect(properties, ['Status', '状态'])),
+    status: normalizeStatus(readSelect(properties, ['Status', '状态', '服役状态'])),
     imageUrl:
-      readFile(properties, ['Image', '图片']) ??
+      readFile(properties, ['Image', '图片', '产品图片']) ??
       page.cover?.external?.url ??
       page.cover?.file?.url ??
       '',
@@ -137,7 +139,8 @@ function normalizeStatus(value: string | undefined): AssetStatus {
     normalized === 'retired' ||
     normalized === 'sold' ||
     normalized === '退役' ||
-    normalized === '已出售'
+    normalized === '已出售' ||
+    normalized === '已退役'
   ) {
     return 'retired'
   }

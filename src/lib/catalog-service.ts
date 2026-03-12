@@ -2,6 +2,7 @@ import {
   asCatalogSnapshot,
   CatalogSnapshot,
   cloneSnapshotAsCache,
+  getAssetImageStorageKey,
   getCatalogCacheKey,
   getSampleCatalog,
   isSnapshotFresh,
@@ -13,12 +14,30 @@ export type KVNamespaceLike = {
   put(key: string, value: string): Promise<void>
 }
 
+export type R2ObjectLike = {
+  body?: BodyInit | null
+  writeHttpMetadata?(headers: Headers): void
+}
+
+export type R2BucketLike = {
+  get(key: string): Promise<R2ObjectLike | null>
+  put(
+    key: string,
+    value: BodyInit | null,
+    options?: {
+      httpMetadata?: {
+        contentType?: string
+      }
+    }
+  ): Promise<void>
+}
+
 export type AppBindings = {
-  ADMIN_TOKEN?: string
   NOTION_API_TOKEN?: string
   NOTION_DATA_SOURCE_ID?: string
   CATALOG_STALE_MS?: string
-  CATALOG_CACHE?: KVNamespaceLike
+  KV?: KVNamespaceLike
+  R2?: R2BucketLike
 }
 
 const DEFAULT_STALE_MS = 1000 * 60 * 60 * 6
@@ -27,8 +46,8 @@ export async function getCatalogSnapshot(
   env: AppBindings | undefined,
   now = new Date()
 ): Promise<CatalogSnapshot> {
-  const cachedSnapshot = env?.CATALOG_CACHE
-    ? await readSnapshotFromCache(env.CATALOG_CACHE)
+  const cachedSnapshot = env?.KV
+    ? await readSnapshotFromCache(env.KV)
     : null
   const staleMs = getStaleMs(env)
 
@@ -71,8 +90,30 @@ export async function syncCatalog(
     now
   )
 
-  if (env.CATALOG_CACHE) {
-    await env.CATALOG_CACHE.put(getCatalogCacheKey(), JSON.stringify(snapshot))
+  if (env.R2) {
+    await Promise.all(
+      snapshot.items.map(async (item) => {
+        if (!item.imageUrl) {
+          return
+        }
+
+        const response = await fetch(item.imageUrl)
+
+        if (!response.ok) {
+          return
+        }
+
+        await env.R2!.put(getAssetImageStorageKey(item.id), await response.arrayBuffer(), {
+          httpMetadata: {
+            contentType: response.headers.get('content-type') ?? undefined,
+          },
+        })
+      })
+    )
+  }
+
+  if (env.KV) {
+    await env.KV.put(getCatalogCacheKey(), JSON.stringify(snapshot))
   }
 
   return snapshot

@@ -1,4 +1,3 @@
-ADMIN_TOKEN=replace-me
 NOTION_API_TOKEN=secret_xxx
 NOTION_DATA_SOURCE_ID=xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx
 CATALOG_STALE_MS=21600000
