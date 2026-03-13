@@ -1,104 +1,129 @@
+import { CatalogSnapshot, getAssetMediaUrl } from '../lib/catalog'
 import {
-  CatalogSnapshot,
-  formatCurrency,
-  getAssetMediaUrl,
-  getStatusLabel,
-} from '../lib/catalog'
+  AppLocale,
+  buildLocaleHref,
+  formatCurrencyForLocale,
+  formatDateForLocale,
+  formatActiveRatio,
+  getMessages,
+  getStatusLabelForLocale,
+  SUPPORTED_LOCALES,
+} from '../lib/i18n'
 
 type HomePageProps = {
   snapshot: CatalogSnapshot
+  locale: AppLocale
+  requestUrl: URL
 }
 
-export function HomePage({ snapshot }: HomePageProps) {
+export function HomePage({ snapshot, locale, requestUrl }: HomePageProps) {
+  const messages = getMessages(locale)
+
   return (
     <main class="page-shell">
-      <section class="summary-rail">
-        <div class="summary-copy">
-          <p class="eyebrow">Collection</p>
-          <h1>Worth Collection</h1>
-          <p class="summary-note">
-            A quiet ledger of the things you bought, still use, and slowly pay
-            for every day.
-          </p>
-        </div>
-        <div class="summary-metrics">
-          <article class="metric-tile">
-            <span class="metric-label">Total Spend</span>
-            <strong>
-              {formatCurrency(
-                snapshot.summary.totalPurchaseValue,
-                snapshot.summary.currency
-              )}
-            </strong>
-          </article>
-          <article class="metric-tile metric-tile-accent">
-            <span class="metric-label">Daily Carry</span>
-            <strong>
-              {formatCurrency(
-                snapshot.summary.portfolioDailyCost,
-                snapshot.summary.currency
-              )}
-            </strong>
-          </article>
-        </div>
-      </section>
-
-      <section class="gallery-section">
-        <div class="section-heading section-heading-compact">
-          <div>
-            <p class="eyebrow">Gallery</p>
-            <h2>Daily objects, quietly depreciating</h2>
+      <header class="site-head">
+        <div class="site-bar">
+          <div class="site-copy">
+            <h1>{messages.title}</h1>
+            <p>{messages.description}</p>
           </div>
-          <span class="collection-count">
-            {snapshot.summary.activeAssets}/{snapshot.summary.totalAssets} active
-          </span>
+
+          <nav aria-label={messages.languageLabel} class="locale-switch">
+            {SUPPORTED_LOCALES.map((targetLocale) => {
+              const targetMessages = getMessages(targetLocale)
+              const isCurrent = targetLocale === locale
+
+              return (
+                <a
+                  aria-current={isCurrent ? 'page' : undefined}
+                  class={`locale-link${isCurrent ? ' locale-link-active' : ''}`}
+                  href={buildLocaleHref(requestUrl, targetLocale)}
+                  key={targetLocale}
+                >
+                  {targetMessages.localeName}
+                </a>
+              )
+            })}
+          </nav>
         </div>
 
-        <div class="gallery-grid">
-          {snapshot.items.map((item) => (
-            <article class="gallery-card" key={item.id}>
-              <div
-                class={`gallery-media${item.imageUrl ? '' : ' gallery-media-empty'}`}
-                style={
-                  item.imageUrl
-                    ? `background-image: url(${getAssetMediaUrl(item.id)});`
-                    : undefined
-                }
-              >
-                {!item.imageUrl ? <span>No image</span> : null}
+        <dl class="site-summary">
+          <div>
+            <dt>{messages.totalSpend}</dt>
+            <dd>
+              {formatCurrencyForLocale(
+                snapshot.summary.totalPurchaseValue,
+                snapshot.summary.currency,
+                locale
+              )}
+            </dd>
+          </div>
+          <div>
+            <dt>{messages.dailyCost}</dt>
+            <dd>
+              {formatCurrencyForLocale(
+                snapshot.summary.portfolioDailyCost,
+                snapshot.summary.currency,
+                locale
+              )}
+            </dd>
+          </div>
+          <div>
+            <dt>{messages.activeAssets}</dt>
+            <dd>{formatActiveRatio(snapshot)}</dd>
+          </div>
+        </dl>
+      </header>
+
+      <section aria-label={messages.assetGridLabel} class="asset-grid">
+        {snapshot.items.map((item) => (
+          <article class="asset-card" key={item.id}>
+            <div
+              class={`asset-media${item.imageUrl ? '' : ' asset-media-empty'}`}
+              style={
+                item.imageUrl
+                  ? `background-image: url(${getAssetMediaUrl(item.id)});`
+                  : undefined
+              }
+            >
+              {!item.imageUrl ? <span>{messages.noImage}</span> : null}
+            </div>
+
+            <div class="asset-copy-block">
+              <div class="asset-meta">
+                <span class="asset-category">{item.category}</span>
+                <span class={`asset-status asset-status-${item.status}`}>
+                  {getStatusLabelForLocale(item.status, locale)}
+                </span>
               </div>
-              <div class="gallery-body">
-                <div class="gallery-topline">
-                  <span class="gallery-meta">{item.category}</span>
-                  <span class={`status-pill status-${item.status}`}>
-                    {getStatusLabel(item.status)}
-                  </span>
+
+              <h2 class="asset-title">{item.name}</h2>
+
+              <dl class="asset-values">
+                <div>
+                  <dt>{messages.purchasePrice}</dt>
+                  <dd>
+                    {formatCurrencyForLocale(
+                      item.purchasePrice,
+                      item.currency,
+                      locale
+                    )}
+                  </dd>
                 </div>
-                <h3 class="gallery-title">{item.name}</h3>
+                <div>
+                  <dt>{messages.dailyCost}</dt>
+                  <dd>{formatCurrencyForLocale(item.dailyCost, item.currency, locale)}</dd>
+                </div>
+              </dl>
 
-                <dl class="gallery-stats">
-                  <div>
-                    <dt>Purchase</dt>
-                    <dd>{formatCurrency(item.purchasePrice, item.currency)}</dd>
-                  </div>
-                  <div>
-                    <dt>Daily Carry</dt>
-                    <dd>{formatCurrency(item.dailyCost, item.currency)}</dd>
-                  </div>
-                </dl>
-
-                <p class="gallery-footnote">
-                  Acquired {formatDate(item.purchaseDate)} · {item.currency}
-                </p>
-              </div>
-            </article>
-          ))}
-        </div>
+              <p class="asset-footnote">
+                {messages.acquiredOn} {formatDateForLocale(item.purchaseDate, locale)} ·{' '}
+                {item.currency}
+              </p>
+            </div>
+          </article>
+        ))}
       </section>
     </main>
   )
-}
-
-function formatDate(value: string) {
-  return value.replaceAll('-', '.')
 }

@@ -95,19 +95,46 @@ describe('worth worker', () => {
   })
 
   test('renders the dashboard page with asset and summary content', async () => {
-    const response = await app.request('http://local.test/')
+    const response = await app.request('http://local.test/', {
+      headers: {
+        'accept-language': 'zh-CN,zh;q=0.9,en;q=0.8',
+      },
+    })
 
     expect(response.status).toBe(200)
 
     const html = await response.text()
 
-    expect(html).toContain('Worth Collection')
-    expect(html).toContain('Daily Carry')
-    expect(html).toContain('Total Spend')
+    expect(html).toContain('<html lang="zh-CN">')
+    expect(html).toContain('<title>日均成本账本</title>')
+    expect(html).toContain('日均成本账本')
+    expect(html).toContain('总购入')
+    expect(html).toContain('日均成本')
     expect(html).toContain('MacBook Pro')
     expect(html).toContain('/media/macbook-pro-m3-max')
-    expect(html).toContain('summary-rail')
-    expect(html).toContain('gallery-grid')
+    expect(html).toContain('site-head')
+    expect(html).toContain('asset-grid')
+    expect(html).toContain('?lang=en')
+  })
+
+  test('lets the query locale override browser language on the page', async () => {
+    const response = await app.request('http://local.test/?lang=en', {
+      headers: {
+        'accept-language': 'zh-CN,zh;q=0.9',
+      },
+    })
+
+    expect(response.status).toBe(200)
+
+    const html = await response.text()
+
+    expect(html).toContain('<html lang="en">')
+    expect(html).toContain('<title>Daily Cost Ledger</title>')
+    expect(html).toContain('Daily Cost Ledger')
+    expect(html).toContain('Total Spend')
+    expect(html).toContain('Daily Cost')
+    expect(html).toContain('?lang=zh-CN')
+    expect(html).not.toContain('日均成本账本')
   })
 
   test('returns a client error when manual sync runs without Notion config', async () => {

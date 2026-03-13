@@ -1,13 +1,19 @@
 import { jsxRenderer } from 'hono/jsx-renderer'
 import { Link, ViteClient } from 'vite-ssr-components/hono'
 
-export const renderer = jsxRenderer(({ children }) => {
+type RendererProps = {
+  children: unknown
+  locale?: string
+  title?: string
+}
+
+export const renderer = jsxRenderer(({ children, locale, title }: RendererProps) => {
   return (
-    <html>
+    <html lang={locale ?? 'zh-CN'}>
       <head>
         <meta charSet="utf-8" />
         <meta content="width=device-width, initial-scale=1" name="viewport" />
-        <title>Worth Collection</title>
+        <title>{title ?? '日均成本账本'}</title>
         <link href="https://fonts.googleapis.com" rel="preconnect" />
         <link crossOrigin="" href="https://fonts.gstatic.com" rel="preconnect" />
         <link

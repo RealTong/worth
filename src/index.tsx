@@ -2,6 +2,7 @@ import { Hono } from 'hono'
 import { HomePage } from './components/home-page'
 import { AppBindings, getCatalogSnapshot, syncCatalog } from './lib/catalog-service'
 import { getAssetImageStorageKey, getAssetMediaUrl } from './lib/catalog'
+import { getMessages, resolveLocale } from './lib/i18n'
 import { renderer } from './renderer'
 
 const app = new Hono<{ Bindings: AppBindings }>()
@@ -9,7 +10,15 @@ const app = new Hono<{ Bindings: AppBindings }>()
 app.use(renderer)
 
 app.get('/', async (c) => {
-  return c.render(<HomePage snapshot={await getCatalogSnapshot(c.env)} />)
+  const requestUrl = new URL(c.req.url)
+  const locale = resolveLocale(requestUrl, c.req.header('accept-language'))
+  const snapshot = await getCatalogSnapshot(c.env)
+  const messages = getMessages(locale)
+
+  return c.render(<HomePage locale={locale} requestUrl={requestUrl} snapshot={snapshot} />, {
+    locale,
+    title: messages.title,
+  })
 })
 
 app.get('/api/assets', async (c) => {
