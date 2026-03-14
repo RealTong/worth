@@ -1,4 +1,4 @@
-import { Hono } from 'hono'
+import { Context, Hono } from 'hono'
 import { HomePage } from './components/home-page'
 import { AppBindings, getCatalogSnapshot, syncCatalog } from './lib/catalog-service'
 import { getAssetImageStorageKey, getAssetMediaUrl } from './lib/catalog'
@@ -93,11 +93,15 @@ app.get('/media/:assetId', async (c) => {
   })
 })
 
-app.post('/api/admin/sync', async (c) => {
+const handleSyncRequest = async (c: Context<{ Bindings: AppBindings }>) => {
   try {
+    c.header('cache-control', 'no-store')
+
     return c.json(await syncCatalog(c.env))
   } catch (error) {
     const message = error instanceof Error ? error.message : 'Sync failed'
+
+    c.header('cache-control', 'no-store')
 
     return c.json(
       {
@@ -106,7 +110,10 @@ app.post('/api/admin/sync', async (c) => {
       message === 'Missing Notion configuration' ? 400 : 502
     )
   }
-})
+}
+
+app.get('/api/admin/sync', handleSyncRequest)
+app.post('/api/admin/sync', handleSyncRequest)
 
 export default {
   fetch: app.fetch,

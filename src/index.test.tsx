@@ -299,6 +299,102 @@ describe('worth worker', () => {
     expect(await cachedImage?.text()).toBe('iphone-image')
   })
 
+  test('triggers the same sync pipeline through a GET endpoint', async () => {
+    const cache = new MemoryKV()
+    const bucket = new MemoryR2()
+
+    globalThis.fetch = async (input, init) => {
+      if (String(input) === 'https://assets.notion.local/ipad.png') {
+        return new Response('ipad-image', {
+          headers: {
+            'content-type': 'image/png',
+          },
+        })
+      }
+
+      expect(String(input)).toContain('/v1/data_sources/ds_123/query')
+      expect(init?.headers).toMatchObject({
+        Authorization: 'Bearer notion_secret',
+      })
+
+      return Response.json({
+        results: [
+          {
+            id: 'page_ipad_pro',
+            properties: {
+              名称: {
+                type: 'title',
+                title: [
+                  {
+                    plain_text: 'iPad Pro',
+                  },
+                ],
+              },
+              购买价格: {
+                type: 'number',
+                number: 9299,
+              },
+              货币: {
+                type: 'select',
+                select: {
+                  name: 'CNY',
+                },
+              },
+              购买时间: {
+                type: 'date',
+                date: {
+                  start: '2025-05-02',
+                },
+              },
+              服役状态: {
+                type: 'select',
+                select: {
+                  name: '服役中',
+                },
+              },
+              产品图片: {
+                type: 'files',
+                files: [
+                  {
+                    type: 'file',
+                    name: 'ipad.png',
+                    file: {
+                      url: 'https://assets.notion.local/ipad.png',
+                    },
+                  },
+                ],
+              },
+            },
+          },
+        ],
+      })
+    }
+
+    const response = await app.request(
+      'http://local.test/api/admin/sync',
+      {
+        method: 'GET',
+      },
+      {
+        NOTION_API_TOKEN: 'notion_secret',
+        NOTION_DATA_SOURCE_ID: 'ds_123',
+        KV: cache,
+        R2: bucket,
+      }
+    )
+
+    expect(response.status).toBe(200)
+
+    const payload = await response.json()
+    const snapshot = await cache.get('worth:catalog', 'json')
+    const cachedImage = await bucket.get('assets/page_ipad_pro')
+
+    expect(payload.meta.source).toBe('notion')
+    expect(payload.items[0].name).toBe('iPad Pro')
+    expect(snapshot.items[0].name).toBe('iPad Pro')
+    expect(await cachedImage?.text()).toBe('ipad-image')
+  })
+
   test('runs the same sync pipeline from the scheduled worker handler', async () => {
     const cache = new MemoryKV()
     const bucket = new MemoryR2()
