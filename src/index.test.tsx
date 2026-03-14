@@ -395,6 +395,127 @@ describe('worth worker', () => {
     expect(await cachedImage?.text()).toBe('ipad-image')
   })
 
+  test('changes the public media URL after notion image updates', async () => {
+    const cache = new MemoryKV()
+    const bucket = new MemoryR2()
+    let queryCount = 0
+
+    globalThis.fetch = async (input, init) => {
+      if (String(input) === 'https://assets.notion.local/camera-v1.png') {
+        return new Response('camera-image-v1', {
+          headers: {
+            'content-type': 'image/png',
+          },
+        })
+      }
+
+      if (String(input) === 'https://assets.notion.local/camera-v2.png') {
+        return new Response('camera-image-v2', {
+          headers: {
+            'content-type': 'image/png',
+          },
+        })
+      }
+
+      expect(String(input)).toContain('/v1/data_sources/ds_123/query')
+      expect(init?.headers).toMatchObject({
+        Authorization: 'Bearer notion_secret',
+      })
+
+      queryCount += 1
+
+      return Response.json({
+        results: [
+          {
+            id: 'page_camera',
+            last_edited_time:
+              queryCount === 1 ? '2026-03-14T10:00:00.000Z' : '2026-03-14T10:05:00.000Z',
+            properties: {
+              名称: {
+                type: 'title',
+                title: [
+                  {
+                    plain_text: 'Camera',
+                  },
+                ],
+              },
+              购买价格: {
+                type: 'number',
+                number: 4999,
+              },
+              货币: {
+                type: 'select',
+                select: {
+                  name: 'CNY',
+                },
+              },
+              购买时间: {
+                type: 'date',
+                date: {
+                  start: '2025-06-01',
+                },
+              },
+              服役状态: {
+                type: 'select',
+                select: {
+                  name: '服役中',
+                },
+              },
+              产品图片: {
+                type: 'files',
+                files: [
+                  {
+                    type: 'file',
+                    name: queryCount === 1 ? 'camera-v1.png' : 'camera-v2.png',
+                    file: {
+                      url:
+                        queryCount === 1
+                          ? 'https://assets.notion.local/camera-v1.png'
+                          : 'https://assets.notion.local/camera-v2.png',
+                    },
+                  },
+                ],
+              },
+            },
+          },
+        ],
+      })
+    }
+
+    const env = {
+      NOTION_API_TOKEN: 'notion_secret',
+      NOTION_DATA_SOURCE_ID: 'ds_123',
+      KV: cache,
+      R2: bucket,
+    }
+
+    await app.request(
+      'http://local.test/api/admin/sync',
+      {
+        method: 'POST',
+      },
+      env
+    )
+
+    const firstAssetsResponse = await app.request('http://local.test/api/assets', undefined, env)
+    const firstPayload = await firstAssetsResponse.json()
+
+    await app.request(
+      'http://local.test/api/admin/sync',
+      {
+        method: 'POST',
+      },
+      env
+    )
+
+    const secondAssetsResponse = await app.request('http://local.test/api/assets', undefined, env)
+    const secondPayload = await secondAssetsResponse.json()
+    const cachedImage = await bucket.get('assets/page_camera')
+
+    expect(firstPayload.items[0].mediaUrl).not.toBe(secondPayload.items[0].mediaUrl)
+    expect(await cachedImage?.text()).toBe('camera-image-v2')
+  })
+
   test('runs the same sync pipeline from the scheduled worker handler', async () => {
     const cache = new MemoryKV()
     const bucket = new MemoryR2()

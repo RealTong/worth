@@ -29,6 +29,7 @@ type NotionProperty = {
 
 type NotionPage = {
   id: string
+  last_edited_time?: string
   cover?: {
     external?: {
       url?: string
@@ -123,6 +124,7 @@ function mapNotionPageToAsset(page: NotionPage): AssetSeed {
       page.cover?.external?.url ??
       page.cover?.file?.url ??
       '',
+    mediaVersion: page.last_edited_time ?? undefined,
     notes: readRichText(properties, ['Notes', '备注', 'Comment']) ?? '',
   }
 }

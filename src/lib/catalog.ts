@@ -12,6 +12,7 @@ export type AssetItem = {
   purchaseDate: string
   status: AssetStatus
   imageUrl: string
+  mediaVersion?: string
   notes: string
   daysOwned: number
   dailyCost: number
@@ -178,8 +179,12 @@ export function getCatalogCacheKey() {
   return 'worth:catalog'
 }
 
-export function getAssetMediaUrl(assetId: string) {
-  return `/media/${assetId}`
+export function getAssetMediaUrl(assetId: string, mediaVersion?: string) {
+  if (!mediaVersion) {
+    return `/media/${assetId}`
+  }
+
+  return `/media/${assetId}?v=${encodeURIComponent(mediaVersion)}`
 }
 
 export function getAssetImageStorageKey(assetId: string) {

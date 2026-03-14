@@ -28,7 +28,7 @@ app.get('/api/assets', async (c) => {
     ...snapshot,
     items: snapshot.items.map((item) => ({
       ...item,
-      mediaUrl: getAssetMediaUrl(item.id),
+      mediaUrl: getAssetMediaUrl(item.id, item.mediaVersion),
     })),
   })
 })

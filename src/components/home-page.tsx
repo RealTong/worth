@@ -82,7 +82,7 @@ export function HomePage({ snapshot, locale, requestUrl }: HomePageProps) {
               class={`asset-media${item.imageUrl ? '' : ' asset-media-empty'}`}
               style={
                 item.imageUrl
-                  ? `background-image: url(${getAssetMediaUrl(item.id)});`
+                  ? `background-image: url(${getAssetMediaUrl(item.id, item.mediaVersion)});`
                   : undefined
               }
             >
