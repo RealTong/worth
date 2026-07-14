@@ -1,6 +1,7 @@
 export type AssetStatus = 'active' | 'idle' | 'retired'
 export type CatalogSource = 'sample' | 'notion' | 'cache'
 export type CurrencyCode = 'CNY' | 'USD' | 'MIXED' | string
+export type BillingCycle = 'monthly' | 'yearly'
 
 export type AssetItem = {
   id: string
@@ -11,6 +12,7 @@ export type AssetItem = {
   currentPrice: number
   purchaseDate: string
   status: AssetStatus
+  billingCycle?: BillingCycle
   imageUrl: string
   mediaVersion?: string
   notes: string
@@ -41,6 +43,11 @@ export type CatalogSnapshot = {
 export type AssetSeed = Omit<AssetItem, 'daysOwned' | 'dailyCost' | 'priceDelta'>
 
 const DAY_IN_MS = 24 * 60 * 60 * 1000
+
+const BILLING_CYCLE_DAYS: Record<BillingCycle, number> = {
+  monthly: 30,
+  yearly: 365,
+}
 
 const SAMPLE_ASSETS: AssetSeed[] = [
   {
@@ -82,6 +89,20 @@ const SAMPLE_ASSETS: AssetSeed[] = [
       'https://images.unsplash.com/photo-1606220945770-b5b6c2c55bf1?auto=format&fit=crop&w=1200&q=80',
     notes: 'Daily commute companion with low resale value and high usage.',
   },
+  {
+    id: 'chatgpt-plus',
+    name: 'ChatGPT Plus',
+    category: 'Subscription',
+    currency: 'USD',
+    purchasePrice: 20,
+    currentPrice: 20,
+    purchaseDate: '2025-01-01',
+    status: 'active',
+    billingCycle: 'monthly',
+    imageUrl:
+      'https://images.unsplash.com/photo-1677442136019-21780ecad995?auto=format&fit=crop&w=1200&q=80',
+    notes: 'Monthly subscription; daily cost is the renewal price divided by 30.',
+  },
 ]
 
 export function getSampleCatalog(now = new Date()): CatalogSnapshot {
@@ -107,11 +128,12 @@ export function buildCatalogSnapshot(
 
 export function buildAssetItem(asset: AssetSeed, now = new Date()): AssetItem {
   const daysOwned = getDaysOwned(asset.purchaseDate, now)
+  const cycleDays = asset.billingCycle ? BILLING_CYCLE_DAYS[asset.billingCycle] : undefined
 
   return {
     ...asset,
     daysOwned,
-    dailyCost: roundCurrency(asset.purchasePrice / daysOwned),
+    dailyCost: roundCurrency(asset.purchasePrice / (cycleDays ?? daysOwned)),
     priceDelta: roundCurrency(asset.currentPrice - asset.purchasePrice),
   }
 }

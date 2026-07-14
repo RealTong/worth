@@ -299,6 +299,86 @@ describe('worth worker', () => {
     expect(await cachedImage?.text()).toBe('iphone-image')
   })
 
+  test('computes daily cost from the renewal price for subscription assets', async () => {
+    const cache = new MemoryKV()
+    const bucket = new MemoryR2()
+
+    globalThis.fetch = async () => {
+      return Response.json({
+        results: [
+          {
+            id: 'page_chatgpt_plus',
+            properties: {
+              名称: {
+                type: 'title',
+                title: [
+                  {
+                    plain_text: 'ChatGPT Plus',
+                  },
+                ],
+              },
+              分类: {
+                type: 'select',
+                select: {
+                  name: '订阅',
+                },
+              },
+              购买价格: {
+                type: 'number',
+                number: 30,
+              },
+              货币: {
+                type: 'select',
+                select: {
+                  name: 'USD',
+                },
+              },
+              购买时间: {
+                type: 'date',
+                date: {
+                  start: '2025-01-01',
+                },
+              },
+              服役状态: {
+                type: 'select',
+                select: {
+                  name: '服役中',
+                },
+              },
+              计费周期: {
+                type: 'select',
+                select: {
+                  name: '月付',
+                },
+              },
+            },
+          },
+        ],
+      })
+    }
+
+    const response = await app.request(
+      'http://local.test/api/admin/sync',
+      {
+        method: 'POST',
+      },
+      {
+        NOTION_API_TOKEN: 'notion_secret',
+        NOTION_DATA_SOURCE_ID: 'ds_123',
+        KV: cache,
+        R2: bucket,
+      }
+    )
+
+    expect(response.status).toBe(200)
+
+    const payload = await response.json()
+
+    expect(payload.items[0].name).toBe('ChatGPT Plus')
+    expect(payload.items[0].category).toBe('订阅')
+    expect(payload.items[0].dailyCost).toBe(1)
+  })
+
   test('triggers the same sync pipeline through a GET endpoint', async () => {
     const cache = new MemoryKV()
     const bucket = new MemoryR2()

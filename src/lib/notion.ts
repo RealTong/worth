@@ -1,4 +1,4 @@
-import { AssetSeed, AssetStatus, buildCatalogSnapshot, CatalogSnapshot } from './catalog'
+import { AssetSeed, AssetStatus, BillingCycle, buildCatalogSnapshot, CatalogSnapshot } from './catalog'
 
 type NotionTextBlock = {
   plain_text?: string
@@ -119,6 +119,9 @@ function mapNotionPageToAsset(page: NotionPage): AssetSeed {
       readDate(properties, ['PurchaseDate', 'Purchase Date', '购买日期', '购买时间']) ??
       new Date().toISOString().slice(0, 10),
     status: normalizeStatus(readSelect(properties, ['Status', '状态', '服役状态'])),
+    billingCycle: normalizeBillingCycle(
+      readSelect(properties, ['BillingCycle', 'Billing Cycle', '计费周期', '续费周期'])
+    ),
     imageUrl:
       readFile(properties, ['Image', '图片', '产品图片']) ??
       page.cover?.external?.url ??
@@ -147,6 +150,20 @@ function normalizeStatus(value: string | undefined): AssetStatus {
   }
 
   return 'active'
+}
+
+function normalizeBillingCycle(value: string | undefined): BillingCycle | undefined {
+  const normalized = value?.trim().toLowerCase()
+
+  if (normalized === 'monthly' || normalized === '月付' || normalized === '按月') {
+    return 'monthly'
+  }
+
+  if (normalized === 'yearly' || normalized === '年付' || normalized === '按年') {
+    return 'yearly'
+  }
+
+  return undefined
 }
 
 function readTitle(
